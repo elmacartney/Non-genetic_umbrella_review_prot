@@ -1,0 +1,684 @@
+---
+title: "Non-genetic inheritance of environmental exposures: a protocol for an umbrella review with bibliometric analysis - pilot code"
+author: "Erin Macartney"
+date: "03/03/2021"
+output:
+  html_document:
+    code_folding: hide
+    df_print: kable
+    toc: yes
+---
+
+Here, we provide a preliminary workflow of data processing and visualisation to address the following objectives: 
+
+1)	Map the systematic review (hereafter "SR") literature across disciplines e.g., the types of environmental exposures and traits synthesised, the proportion of SRs that examine inter- versus trans-generational effects, and which disciplines dominate the non-genetic inheritance SR literature. The map will highlight gaps in the literature that remain to be synthesised or have very few SRs.
+
+2)	Present discipline-specific research patterns by summarising commonalities and disparities between disciplines (e.g., do SRs of specific environmental exposures dominate one discipline and not others? Do some disciplines focus on inter-generational effects, and another on trans-generational effects?).
+
+3)	Conduct bibliometric analyses of co-author networks and common terminology use across and within disciplines. 
+
+4)	Conduct a critical appraisal of the SR literature to assess the rigour, transparency, and risk of bias. 
+
+**Note:** The code and output are based on a pilot set of data extracted from 7 benchmark papers that fulfilled our inclusion criteria during piloting stage. This code will be expanded and adjusted for the final data set (e.g., additional data cleaning steps or adjustments to the plot styles and contents). These changes will be documented via tracking on GitHub.
+
+### Loading packages
+
+```{r setup, message = FALSE, warning = FALSE, results = 'hide'}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(plyr)
+library(tibble)
+library(dplyr)
+library(tidyverse)
+library(stringr)
+library(knitr)
+library(forcats)
+library(ggplot2)
+library(hrbrthemes) #for ggplot2
+library(patchwork) #for ggplot2
+library(bibliometrix)
+library(igraph)
+
+```
+
+### Data loading
+
+Manually extractred data used to address objectives 1,2 and 4 are stored in an .xls file with multiple spreadsheets within the same file. Bibliometric data used to address object 3 is stored as a .bib file that was exported directly from Scopus. Both files can be found on the open Science Framework https://osf.io/detvk/ 
+
+``` {r, message = FALSE, warning = FALSE, results = 'hide'}
+#Macbook
+#xldata <- "/Users/erinmacartney/OneDrive\ NEW/OneDrive\ -\ UNSW/Overview\ of\ reviews_trans\ environment\ effects/Protocol_Environmental\ International/Submission_Eniron\ international/resubmission/Pilot_data_extraction.xlsx"
+
+#microsoft computer: 
+xldata <- "./Data/Pilot_data_extraction.xlsx"
+
+#bibliometric data (microsoft): 
+bib <- convert2df("./Data/pilot_bibliometrics.bib", dbsource = "scopus", format = "bibtex")
+```
+
+### Data organisation 
+
+Splitting list of dataframes into separate dataframes and joining controlled vocubulary dataframes with coded data.
+
+``` {r, message = FALSE, warning = FALSE, results = 'hide'}
+
+excel_sheets(path = xldata)
+tab_names <- excel_sheets(path = xldata)
+
+#creating a list of dataframes per tab
+list_all <- lapply(tab_names, function(x) read_excel(path = xldata, sheet = x))
+
+#assigning tab names to each dataframe
+names(list_all) <- tab_names
+
+#get dataframes out of list
+list2env(list_all, .GlobalEnv) # this does what you want
+
+#Review_info
+Review_info <- Review_info %>% 
+  left_join(Topic_code_info, by = "topic_code") %>%
+  left_join(Discipline_code_info, by = "discipline_code") %>% 
+  left_join(Terminology_code_info, by = "terminology_code")%>%
+  left_join(Mutagen_code_info, by = "mutagen_code")
+
+#Higher_taxon_info
+Higher_taxon_info <- left_join(Higher_taxon_info, Taxon_code_info)
+
+#Transmission_info
+Transmission_info <- left_join(Transmission_info, Transmission_code_info)
+
+#Inter_vs_trans_info
+Inter_vs_trans_info <- left_join(Inter_vs_trans_info, Inter_vs_trans_code_info)
+
+#Env_mismatch_info
+Env_mismatch_info <- left_join(Env_mismatch_info, Env_mismatch_code_info)
+
+#F0_env_info
+F0_env_info <- left_join(F0_env_info, F0_env_code_info)
+
+#Env_eff_direction
+Env_eff_diection_info <- left_join(Env_eff_diection_info, Env_eff_direction_code_info)
+
+#Exposure_timing_info
+Exposure_timing_info <- left_join(Exposure_timing_info, Exposure_timing_code_info)
+
+#Descendant_trait_info
+Descendant_trait_info <- left_join(Descendant_trait_info, Descendant_trait_code_info)
+
+#Descendant_age_info
+Descendant_age_info <- left_join(Descendant_age_info, Descendant_age_code_info)
+
+#Descendant_sex_info
+Descendant_sex_info <- left_join(Descendant_sex_info, Descendant_sex_code_info)
+
+#Descendant_generat_info
+Descendant_generat_info <- left_join(Descendant_generat_info, Descendant_generat_code_info)
+
+```
+
+## Addressing objectives 1 and 2
+
+1)	Map the SR literature across disciplines e.g., the types of environmental exposures and traits synthesised, the proportion of SRs that examine inter- versus trans-generational effects, and which disciplines dominate the non-genetic inheritance SR literature. The map will highlight gaps in the literature that remain to be synthesised or have very few SRs.
+
+2)	Present discipline-specific research patterns by summarising commonalities and disparities between disciplines (e.g., do SRs of specific environmental exposures dominate one discipline and not others? Do some disciplines focus on inter-generational effects, and another on trans-generational effects?).
+
+The following visualisations allow us to determine both within and between discipline reserach patterns and gaps in the SR literature by showing the percent of SRs that include certain data elements and how these patterns are divided between disciplines. 
+
+**Note:** Out current pilot data only inludes two discplines: ecology and evolution 'eco evo' and biomedical sciences 'biomedicine', but the full dataset will likely include additional disciplines. 
+
+### Percent of SR's within disciplines
+
+``` {r, message = FALSE, warning = FALSE}
+
+count_discipline <-Review_info %>% count(controlled_vocab_discipline) %>% arrange(desc(n)) 
+percent_discipline <- count_discipline %>% mutate(percent = (n/sum(n))*100)
+percent_discipline$controlled_vocab_discipline <- factor(percent_discipline$controlled_vocab_discipline, level = percent_discipline$controlled_vocab_discipline[order(percent_discipline$n, decreasing = FALSE)])
+
+ggplot(percent_discipline, aes(x = controlled_vocab_discipline, y = percent)) + 
+  geom_col(aes(fill = ""), width = 0.7) + 
+  theme_light() +
+  coord_flip() + 
+  scale_y_continuous(name = "Percent") +
+  xlab("Discipline") + 
+  scale_fill_manual(values = c("#919191")) +
+  theme(legend.position = "none", axis.title.x = element_text(size = 10))
+
+```
+
+### Inter- vs trans-generational effects within and between disciplines
+
+```{r, message = FALSE, warning = FALSE}
+
+Merged_inter_vs_trans <- merge(Inter_vs_trans_info, Review_info)
+
+count_inter_vs_trans <- Merged_inter_vs_trans %>% count(controlled_vocab_inter_vs_trans, by = controlled_vocab_discipline ) %>% arrange(desc(n))
+percent_inter_vs_trans <- count_inter_vs_trans %>% mutate(percent = (n/sum(n))*100)
+
+percent_inter_vs_trans <-percent_inter_vs_trans %>%
+  rename(
+    controlled_vocab_discipline = by
+  )
+
+ggplot(percent_inter_vs_trans, aes(x = controlled_vocab_inter_vs_trans, y = percent)) + 
+  geom_col(aes(fill = controlled_vocab_discipline), width = 0.7) + 
+  theme_light() +
+  coord_flip() + 
+  scale_y_continuous(name = "Percent") +
+  theme(legend.position = "bottom", axis.title.x = element_text(size = 10), axis.title.y = element_blank()) + 
+  guides(fill=guide_legend(title="Discipline:"))
+
+```
+
+#### Table showing the original data code, the controlled vacabularly used, and a description of what the controlled vocabulary means. 
+
+Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
+``` {r, }
+Inter_vs_trans_info_unique <- Inter_vs_trans_info %>% 
+  select(
+    inter_vs_trans_code, controlled_vocab_inter_vs_trans, description
+  ) 
+unique(Inter_vs_trans_code_info) %>% arrange(inter_vs_trans_code)
+```
+
+### Descendant generations within and between disciplines
+
+```{r, message = FALSE, warning = FALSE}
+
+merged_descendant_generat <- merge(Descendant_generat_info, Review_info)
+
+count_descendant_generat <- merged_descendant_generat %>% count(controlled_vocab_descendant_generat, by = controlled_vocab_discipline) %>% arrange(desc(n))
+percent_descendant_generat <- count_descendant_generat %>% mutate(percent = (n/sum(n))*100)
+
+percent_descendant_generat <- percent_descendant_generat %>% 
+  rename (
+    controlled_vocab_discipline = by
+  )
+
+ggplot(percent_descendant_generat, aes(x = controlled_vocab_descendant_generat, y = percent)) + 
+  geom_col(aes(fill = controlled_vocab_discipline), width = 0.7) + 
+  theme_light() +
+  coord_flip() + 
+  scale_y_continuous(name = "Percent") +
+  theme(legend.position = "bottom", axis.title.x = element_text(size = 10), axis.title.y = element_blank()) + 
+  guides(fill=guide_legend(title="Discipline:"))
+
+```
+
+#### Table showing the original data code, the controlled vacabularly used, and a description of what the controlled vocabulary means. 
+
+Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
+``` {r, }
+Descendant_generat_info_unique <- Descendant_generat_info %>% 
+  select(
+    descendant_generat_code, controlled_vocab_descendant_generat, description
+  )
+unique(Descendant_generat_info_unique) %>% arrange(descendant_generat_code)
+```
+### Terminology used within and between disciplines
+I.e., does the use of inter- and trans-generational inheritance match our definitions (see Fig. 1 of protocol)
+
+``` {r, message = FALSE, warning = FALSE}
+
+count_terminology <- Review_info %>% count(controlled_vocab_terminology, by = controlled_vocab_discipline) %>% arrange(desc(n))
+percent_terminology <- count_terminology %>% mutate(percent = (n/sum(n))*100)
+
+percent_terminology<- percent_terminology %>%
+  rename(
+    controlled_vocab_discipline = by
+  )
+
+ggplot(percent_terminology, aes(x = controlled_vocab_terminology, y = percent)) + 
+  geom_col(aes(fill = controlled_vocab_discipline), width = 0.7) + 
+  theme_light() +
+  coord_flip() +  
+  scale_y_continuous(name = "Percent") +
+  theme(legend.position = "bottom", axis.title.x = element_text(size = 10), axis.title.y = element_blank()) + 
+  guides(fill=guide_legend(title="Discipline:"))
+
+```
+
+#### Table showing the original data code, the controlled vacabularly used, and a description of what the controlled vocabulary means. 
+
+Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
+``` {r, }
+terminology_code_unique <- Review_info %>% 
+  select(
+    terminology_code, controlled_vocab_terminology, description_terminology
+  )
+unique(terminology_code_unique) %>% arrange(terminology_code)
+```
+
+### Types of non-genetic transmission within and between disciplines
+I.e., are the non-genetic effects conferred through the matriline or patriline etc.
+
+```{r, message = FALSE, warning = FALSE}
+
+Merged_transmission_info <- merge(Transmission_info, Review_info)
+
+count_transmission <- Merged_transmission_info %>%  count(controlled_vocab_transmission, by = controlled_vocab_discipline) %>% arrange(desc(n))
+percent_transmission <- count_transmission %>% mutate(percent = (n/sum(n))*100)
+
+percent_transmission <-percent_transmission %>%
+  rename(
+    controlled_vocab_discipline = by
+  )
+
+ggplot(percent_transmission, aes(x = controlled_vocab_transmission, y = percent)) + 
+  geom_col(aes(fill = controlled_vocab_discipline), width = 0.7) + 
+  theme_light() +
+  coord_flip() + 
+  scale_y_continuous(name = "Percent") +
+  theme(legend.position = "bottom", axis.title.x = element_text(size = 10), axis.title.y = element_blank()) + 
+  guides(fill=guide_legend(title="Discipline:"))
+
+```
+
+#### Table showing the original data code, the controlled vacabularly used, and a description of what the controlled vocabulary means. 
+
+Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
+``` {r, }
+Transmission_info_unique <- Transmission_info %>% 
+  select(
+    transmission_code, controlled_vocab_transmission, description
+  )
+unique(Transmission_info_unique) %>% arrange(transmission_code)
+```
+
+### F0 environmental manipulations within and between disciplines
+
+```{r, message = FALSE, warning = FALSE}
+
+merged_F0_env <- merge(F0_env_info, Review_info)
+
+count_F0_env<- merged_F0_env %>% count(controlled_vocab_F0_env, by = controlled_vocab_discipline ) %>% arrange(desc(n))
+percent_F0_env <- count_F0_env %>% mutate(percent = (n/sum(n))*100)
+ 
+percent_F0_env <-percent_F0_env %>%
+  rename(
+    controlled_vocab_discipline = by
+  )
+
+ggplot(percent_F0_env, aes(x = controlled_vocab_F0_env, y = percent)) + 
+  geom_col(aes(fill = controlled_vocab_discipline), width = 0.7) + 
+  theme_light() +
+  coord_flip() + 
+  scale_y_continuous(name = "Percent") +
+  theme(legend.position = "bottom", axis.title.x = element_text(size = 10), axis.title.y = element_blank()) + 
+  guides(fill=guide_legend(title="Discipline:"))
+
+```
+
+#### Table showing the original data code, the controlled vacabularly used, and a description of what the controlled vocabulary means. 
+
+Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
+``` {r, }
+F0_env_info_unique <- F0_env_info %>% 
+  select(
+    F0_env_code, controlled_vocab_F0_env, description
+  )
+unique(F0_env_info_unique) %>% arrange(F0_env_code)
+```
+
+### Environmental effect direction within and between disciplines
+I.e., are the effects of enviroment predicted to have negative, possitive, or neutral effects on offspring phenotype
+
+```{r, message = FALSE, warning = FALSE}
+
+merged_env_eff <- merge(Env_eff_diection_info, Review_info)
+
+count_env_eff <- merged_env_eff %>% count(controlled_vocab_env_eff_direction, by = controlled_vocab_discipline) %>% arrange(desc(n))
+percent_env_eff <- count_env_eff %>% mutate(percent = (n/sum(n))*100)
+
+percent_env_eff <-percent_env_eff %>%
+  rename(
+    controlled_vocab_discipline = by
+  )
+
+ggplot(percent_env_eff, aes(x = controlled_vocab_env_eff_direction, y = percent)) + 
+  geom_col(aes(fill = controlled_vocab_discipline), width = 0.7) + 
+  theme_light() +
+  coord_flip() + 
+  scale_y_continuous(name = "Percent") +
+  theme(legend.position = "bottom", axis.title.x = element_text(size = 10), axis.title.y = element_blank()) + 
+  guides(fill=guide_legend(title="Discipline:"))
+
+```
+
+#### Table showing the original data code, the controlled vacabularly used, and a description of what the controlled vocabulary means. 
+
+Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
+``` {r, }
+Env_eff_direction_info_unique <- Env_eff_diection_info %>% 
+  select(
+    env_eff_direction_code, controlled_vocab_env_eff_direction, description
+  )
+unique(Env_eff_direction_info_unique) %>% arrange(env_eff_direction_code)
+```
+
+### F0 environmental exposure timing within and between disciplines
+**Note:** We excluded SRs that solely focused on environmental exposures that occured when the F0 generation was a fetus (i.e., pre-natal). However,  some broader SRs (i.e., eco evo SRs) included primary studies where the F0 generation was exposed pre-natally. This was therefore coded in our data. 
+
+```{r, message = FALSE, warning = FALSE}
+
+merged_exposure_timing <- merge(Exposure_timing_info, Review_info)
+
+count_exposure_timing <- merged_exposure_timing %>% count(controlled_vocab_exposure_timing, by = controlled_vocab_discipline) %>% arrange(desc(n))
+percent_exposure_timing <- count_exposure_timing %>% mutate(percent = (n/sum(n))*100)
+
+percent_exposure_timing <-percent_exposure_timing %>%
+  rename (
+    controlled_vocab_discipline = by
+  )
+
+ggplot(percent_exposure_timing, aes(x = controlled_vocab_exposure_timing, y = percent)) + 
+  geom_col(aes(fill = controlled_vocab_discipline), width = 0.7) + 
+  theme_light() +
+  coord_flip() + 
+  scale_y_continuous(name = "Percent") +
+  theme(legend.position = "bottom", axis.title.x = element_text(size = 10), axis.title.y = element_blank()) + 
+  guides(fill=guide_legend(title="Discipline:"))
+
+```
+
+#### Table showing the original data code, the controlled vacabularly used, and a description of what the controlled vocabulary means. 
+
+Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
+``` {r, }
+Exposure_timing_info_unique<- Exposure_timing_info %>% 
+  select(
+    exposure_timing_code, controlled_vocab_exposure_timing, description
+  )
+unique(Exposure_timing_info_unique) %>% arrange(exposure_timing_code)
+```
+
+### Descendant traits within and between disciplines 
+
+```{r, message = FALSE, warning = FALSE}
+
+merged_descendant_trait <- merge(Descendant_trait_info, Review_info)
+
+count_descendant_trait <- merged_descendant_trait %>% count(controlled_vocab_descendant_trait, by = controlled_vocab_discipline) %>% arrange(desc(n))
+percent_descendant_trait <- count_descendant_trait %>% mutate(percent = (n/sum(n))*100)
+
+percent_descendant_trait <- percent_descendant_trait %>%
+  rename(
+    controlled_vocab_discipline = by
+  )
+
+ggplot(percent_descendant_trait, aes(x = controlled_vocab_descendant_trait, y = percent)) + 
+  geom_col(aes(fill = controlled_vocab_discipline), width = 0.7) + 
+  theme_light() + 
+  coord_flip() + 
+  scale_y_continuous(name = "Percent") +
+  theme(legend.position = "bottom", axis.title.x = element_text(size = 10), axis.title.y = element_blank()) + 
+  guides(fill=guide_legend(title="Discipline:"))
+
+```
+
+#### Table showing the original data code, the controlled vacabularly used, and a description of what the controlled vocabulary means. 
+
+Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
+``` {r, }
+Descendant_trait_info_unique<-Descendant_trait_info %>% 
+  select(
+    descendant_trait_code, controlled_vocab_descendant_trait, description
+  )
+unique(Descendant_trait_info_unique) %>% arrange(descendant_trait_code)
+```
+
+### Descendant sex within and between disciplines
+
+```{r, message = FALSE, warning = FALSE}
+
+merged_descendant_sex <- merge(Descendant_sex_info, Review_info)
+
+count_descendant_sex <- merged_descendant_sex %>% count(controlled_vocab_descendant_sex, by = controlled_vocab_discipline) %>% arrange(desc(n))
+percent_descendant_sex <- count_descendant_sex  %>% mutate(percent = (n/sum(n))*100)
+
+percent_descendant_sex <- percent_descendant_sex %>%
+  rename(
+    controlled_vocab_discipline = by
+           )
+
+ggplot(percent_descendant_sex, aes(x = controlled_vocab_descendant_sex, y = percent)) + 
+  geom_col(aes(fill = controlled_vocab_discipline), width = 0.7) + 
+  theme_light() +
+  coord_flip() + 
+  scale_y_continuous(name = "Percent") +
+  theme(legend.position = "bottom", axis.title.x = element_text(size = 10), axis.title.y = element_blank()) + 
+  guides(fill=guide_legend(title="Discipline:"))
+
+```
+
+#### Table showing the original data code, the controlled vacabularly used, and a description of what the controlled vocabulary means. 
+
+Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
+``` {r, }
+Descendant_sex_info_unique<- Descendant_sex_info %>% 
+  select(
+    descendant_sex_code, controlled_vocab_descendant_sex, description
+  )
+unique(Descendant_sex_info_unique) %>% arrange(descendant_sex_code)
+```
+
+### Descendant age within and between disciplines
+**Note:** We excluded SRs that solely focused on fetal traits in descendants. However, some broader SRs included primary studies that mearured fetal traits. This was therefore coeded in our data. 
+
+```{r, message = FALSE, warning = FALSE}
+
+merged_descendant_age <- merge(Descendant_age_info, Review_info)
+
+count_descendant_age <- merged_descendant_age %>% count(controlled_vocab_descendant_age, by = controlled_vocab_discipline) %>% arrange(desc(n))
+percent_descendant_age <- count_descendant_age %>% mutate(percent = (n/sum(n))*100)
+
+percent_descendant_age <- percent_descendant_age %>%
+  rename(
+    controlled_vocab_discipline = by
+  )
+
+ggplot(percent_descendant_age, aes(x = controlled_vocab_descendant_age, y = percent)) + 
+  geom_col(aes(fill = controlled_vocab_discipline), width = 0.7) + 
+  theme_light() +
+  coord_flip() + 
+  scale_y_continuous(name = "Percent") +
+  theme(legend.position = "bottom", axis.title.x = element_text(size = 10), axis.title.y = element_blank()) + 
+  guides(fill=guide_legend(title="Discipline:"))
+
+```
+
+#### Table showing the original data code, the controlled vacabularly used, and a description of what the controlled vocabulary means. 
+
+Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
+``` {r, }
+Descendant_age_info_unique<- Descendant_age_info %>% 
+  select(
+    descendant_age_code, controlled_vocab_descendant_age, description
+  )
+unique(Descendant_age_info_unique) %>% arrange(descendant_age_code)
+```
+
+### Higher taxononmic groups within and between disciplines 
+
+``` {r, message = FALSE, warning = FALSE}
+
+Merged_higher_taxon <- merge(Higher_taxon_info, Review_info)
+
+count_higher_taxon <- Merged_higher_taxon %>% count(controlled_vocab_taxon, by = controlled_vocab_discipline) %>% arrange(desc(n))
+percent_higher_taxon <- count_higher_taxon %>% mutate(percent = (n/sum(n))*100)
+
+percent_higher_taxon<-percent_higher_taxon %>%
+  rename(
+    controlled_vocab_discipline = by
+  )
+
+ggplot(percent_higher_taxon, aes(x = controlled_vocab_taxon, y = percent)) + 
+  geom_col(aes(fill = controlled_vocab_discipline), width = 0.7) + 
+  theme_light() +
+  coord_flip() + 
+  scale_y_continuous(name = "Percent") +
+  theme(legend.position = "bottom", axis.title.x = element_text(size = 10), axis.title.y = element_blank()) + 
+  guides(fill=guide_legend(title="Discipline:"))
+
+```
+
+#### Table showing the original data code, the controlled vacabularly used, and a description of what the controlled vocabulary means. 
+
+Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
+``` {r, }
+Higher_taxon_info_unique<- Higher_taxon_info %>% 
+  select(
+    taxon_code, controlled_vocab_taxon, description
+  )
+unique(Higher_taxon_info_unique) %>% arrange(taxon_code)
+```
+
+## Adressing objective 3
+
+3)	Conduct bibliometric analyses of co-author networks and common terminology use across and within disciplines. 
+
+The following visualisations allow us to view bibliometric patterns from data exported directly from scopus. We are able to view common keyword use, author networks, affiliations, and citation patterns. 
+
+### Author, country, and citation summary plots
+
+``` {r, message = FALSE, warning = FALSE, results = 'hide'}
+
+results1 <- biblioAnalysis(bib) #run basic standard descriptive analysis of the dataset (data frame)
+summary(results1, k = 7, pause = F, width = 130) #produces a sequence of standard summary tables displayed in the console
+
+plot(results1, k = 7, pause = F)
+
+```
+
+### Keyword matrix plot
+
+``` {r, message = FALSE, warning = FALSE}
+
+NetMatrix_keywords <- biblioNetwork(bib, analysis = "co-occurrences", network = "keywords", sep = ";")
+NetMatrix_keywords_plot <- networkPlot(NetMatrix_keywords, normalize="association", n = 10, Title = "Keyword co-occurrences", type = "fruchterman", size.cex = TRUE, size = 30, remove.multiple = F, edgesize = 10, labelsize = 3, label.cex = TRUE,edges.min = 2, cluster = "optimal")
+
+```
+
+### Thematic map
+
+``` {r, message = FALSE, warning = FALSE}
+
+map_thematic <- thematicMap(bib, field = "ID", n = 1000, minfreq = 5, stemming = FALSE, size = 0.5, n.labels = 1, repel = TRUE)
+plot(map_thematic$map)
+
+```
+
+### Author collaboration network
+
+``` {r, message = FALSE, warning = FALSE}
+
+NetMatrix_authors <- biblioNetwork(bib, analysis = "collaboration",  network = "authors", sep = ";")
+NetMatrix_authors_plot <- networkPlot(NetMatrix_authors,  n = 50, Title = "Author collaboration", type = "auto", size = 10, size.cex = TRUE, edgesize = 10, labelsize = 1) #note there are potentially some mistakes in authors initials
+
+```
+
+### Country collaboration network
+
+```{r, message = FALSE, warning = FALSE}
+
+bib_sco2 <- metaTagExtraction(bib, Field = "AU_CO", sep = ";") #we need to extract countries from the affiliations first
+#bib_sco2$AU_CO[1:10]
+NetMatrix_country <- biblioNetwork(bib_sco2, analysis = "collaboration", network = "countries", sep = ";")
+NetMatrix_country_plot <-  networkPlot(NetMatrix_country, n = 50, Title = "Country collaboration", type = "auto", size=TRUE, remove.multiple=FALSE, labelsize=1.5)
+
+```
+
+## Addressing objective 4
+
+4)	Conduct a critical appraisal of the SR literature to assess the rigour, transparency, and risk of bias. 
+
+The following visualisations allow us to see the average scores across each CEESAT questions as well as how each individual SR scored for each CEESAT questions. This will allow us to assess the quality and Risk of Bias of the SR literature. 
+
+**Note:** CEESAT questions and scoring criteria can be found in Appendix_S3 on the open Science Framework https://osf.io/detvk/.
+
+### Blinding paper ID and wrangling data into long format
+
+Paper ID was blinded for the pilot but will not be blinded for the full study
+
+```{r, message = FALSE, warning = FALSE}
+#blinding authors
+Assessment$id <- paste("ID", c(1:length(Assessment$id)), sep = "")
+
+#shortening column names
+names(Assessment) <- gsub("CEESAT_", "", names(Assessment), fixed = TRUE)
+
+#selecting only the columns with scores
+#selecting only the columns with scores
+Assessment_reduced <- select(Assessment, c("id", !ends_with("_comment")))
+
+#wrangling data into long format
+ceesat_long <- gather(Assessment_reduced, question, score, Q1.1:Q8.1, factor_key=TRUE)
+```
+### CEESAT score summary across SRs
+This plot shows the average CEESAT score per question. 
+CEESAT questions and scoring criteria can be found in Appendix_S3 on the open Science Framework https://osf.io/detvk/.
+
+``` {r, message = FALSE, warning = FALSE}
+
+#calculating the % of scores within each questions 
+count_ceesat_score <- ceesat_long %>% count(score, by = question) 
+percent_ceesat_score <- count_ceesat_score %>% mutate(percent = (n/sum(n))*100)
+
+percent_ceesat_score <- percent_ceesat_score %>%
+  rename(
+    question = by
+  )
+
+percent_ceesat_score$question <- as.factor(percent_ceesat_score$question)
+percent_ceesat_score$question <- factor(percent_ceesat_score$question, levels(percent_ceesat_score$question)[length(percent_ceesat_score$question):1]) #reverse the order of questions
+
+percent_ceesat_score$score <- as.factor(percent_ceesat_score$score)
+percent_ceesat_score$score <- factor(percent_ceesat_score$score, levels(percent_ceesat_score$score)[c(2,3,1,4)]) #set the order of levels for assessment scores:
+
+summaryplot <- ggplot(data = percent_ceesat_score, x = question, y = percent) +
+  geom_col(mapping = aes(x = question, y = percent, fill = score), width = 0.7,
+           position = "fill", color = "black") +
+  coord_flip(ylim = c(0, 1)) +
+  guides(fill = guide_legend(reverse = TRUE)) +
+  scale_fill_manual(values = c("yellow","green", "orange","red")) +
+  theme(legend.position = "bottom", panel.grid.major = element_blank(),panel.grid.minor = element_blank(),panel.background = element_blank()) + 
+  ylab("Percent") + xlab("CEESAT question") +
+  guides(fill=guide_legend(title="Score:")) 
+
+summaryplot
+
+```
+
+### Individual CEESAT Scores 
+This plot shows the CEESAT score per SR.
+CEESAT questions and scoring criteria can be found in Appendix_S3 on the open Science Framework https://osf.io/detvk/.
+
+``` {r, message = FALSE, warning = FALSE}
+
+scoresplot <- ggplot(data = ceesat_long, aes(y = id, x = question)) +
+  geom_tile(color="black", fill="white", size = 0.8) +
+  geom_point(aes(color = as.factor(score)), size = 5) +
+  scale_x_discrete(position = "top") +
+  guides(color = guide_legend(reverse = TRUE)) +
+  scale_color_manual(values = c("orange","yellow","green","red" ), name = "Score:") + 
+  theme_minimal() + 
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        legend.position = "bottom",
+        legend.background = element_rect(linetype = "solid", colour = "grey"),
+        legend.key.size = unit(0.75, "cm"),
+        legend.text = element_text(size = 12),
+        axis.text.y = element_text(size = 10, color = "black"),
+        axis.text.x = element_text(angle = 45, hjust=0),
+        plot.margin = unit(c(1,1,1,0), "cm")
+  ) +
+  ylab("Study ID") + 
+  xlab("CEESAT question") 
+
+scoresplot
+
+```
+
+
