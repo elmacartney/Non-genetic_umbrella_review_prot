@@ -17,7 +17,7 @@ Here, we provide a preliminary workflow of data processing and visualisation to 
 
 3)	Conduct bibliometric analyses of co-author networks and common terminology use across and within disciplines. 
 
-4)	Conduct a critical appraisal of the SR literature to assess the rigour, transparency, and risk of bias. 
+4)	Conduct a critical appraisal of the SR literature to assess the rigor, transparency, and risk of bias. 
 
 **Note:** The code and output are based on a pilot set of data extracted from 7 benchmark papers that fulfilled our inclusion criteria during piloting stage. This code will be expanded and adjusted for the final data set (e.g., additional data cleaning steps or adjustments to the plot styles and contents). These changes will be documented via tracking on GitHub.
 
@@ -37,7 +37,6 @@ library(knitr)
 library(forcats)
 library(ggplot2)
 library(hrbrthemes) #for ggplot2
-library(patchwork) #for ggplot2
 library(bibliometrix)
 library(igraph)
 
@@ -51,11 +50,14 @@ Manually extractred data used to address objectives 1,2 and 4 are stored in an .
 #Macbook
 #xldata <- "/Users/erinmacartney/OneDrive\ NEW/OneDrive\ -\ UNSW/Overview\ of\ reviews_trans\ environment\ effects/Protocol_Environmental\ International/Submission_Eniron\ international/resubmission/Pilot_data_extraction.xlsx"
 
+#bib <- convert2df("/Users/erinmacartney/OneDrive\ NEW/OneDrive\ -\ UNSW/Overview\ of\ reviews_trans\ environment\ effects/Protocol_Environmental\ International/Submission_Eniron\ international/resubmission/pilot_bibliometrics.bib", dbsource = "scopus", format = "bibtex")
+
 #microsoft computer: 
 xldata <- "./Data/Pilot_data_extraction.xlsx"
 
 #bibliometric data (microsoft): 
 bib <- convert2df("./Data/pilot_bibliometrics.bib", dbsource = "scopus", format = "bibtex")
+
 ```
 
 ### Data organisation 
@@ -124,9 +126,9 @@ Descendant_generat_info <- left_join(Descendant_generat_info, Descendant_generat
 
 2)	Present discipline-specific research patterns by summarising commonalities and disparities between disciplines (e.g., do SRs of specific environmental exposures dominate one discipline and not others? Do some disciplines focus on inter-generational effects, and another on trans-generational effects?).
 
-The following visualisations allow us to determine both within and between discipline reserach patterns and gaps in the SR literature by showing the percent of SRs that include certain data elements and how these patterns are divided between disciplines. 
-
 **Note:** Out current pilot data only inludes two discplines: ecology and evolution 'eco evo' and biomedical sciences 'biomedicine', but the full dataset will likely include additional disciplines. 
+
+The following visualisations allow us to determine both within and between discipline research patterns and gaps in the SR literature by showing the percent of SRs that include certain data elements and how these patterns are divided between disciplines. 
 
 ### Percent of SR's within disciplines
 
@@ -216,6 +218,7 @@ Descendant_generat_info_unique <- Descendant_generat_info %>%
   )
 unique(Descendant_generat_info_unique) %>% arrange(descendant_generat_code)
 ```
+
 ### Terminology used within and between disciplines
 I.e., does the use of inter- and trans-generational inheritance match our definitions (see Fig. 1 of protocol)
 
@@ -532,6 +535,47 @@ Higher_taxon_info_unique<- Higher_taxon_info %>%
     taxon_code, controlled_vocab_taxon, description
   )
 unique(Higher_taxon_info_unique) %>% arrange(taxon_code)
+```
+
+### Descendent generation vs terminology use across disciplines
+Does the terminology used (i.e., inter- vs trans-generational) match our definition (based on generation, sex and taxa) within the  descendant generations examined
+
+``` {r, }
+
+generat_terminology <- merge(Descendant_generat_info, Review_info)
+  
+count_generat_terminology <- generat_terminology %>% count(controlled_vocab_descendant_generat, by = controlled_vocab_terminology) %>% arrange(desc(n))
+percent_generat_terminology <- count_generat_terminology %>% mutate(percent = (n/sum(n))*100)
+
+percent_generat_terminology<-percent_generat_terminology %>%
+  rename(
+    controlled_vocab_terminology = by
+  )
+
+ggplot(percent_generat_terminology, aes(x = controlled_vocab_descendant_generat, y = percent)) + 
+  geom_col(aes(fill = controlled_vocab_terminology), width = 0.7) + 
+  theme_light() +
+  coord_flip() + 
+  scale_y_continuous(name = "Percent") +
+  theme(legend.position = "bottom", axis.title.x = element_text(size = 10), axis.title.y = element_blank()) + 
+  guides(fill=guide_legend(title="Terminology:"))
+```
+
+### Time trend of the number of SRs per year
+Note that is figure will look considerably different on the full data
+
+``` {r, message = FALSE, warning = FALSE}
+
+Publication_info %>% count(year) %>% ggplot(aes(x = year, y = n)) + 
+  geom_area(fill = '#919191', alpha = 1) +
+  geom_line(color = 'skyblue', size = 1) + 
+  geom_point(size=1, color = 'blue') +
+  theme_minimal() +
+  scale_x_continuous(name = "", limits = c(2005, 2020)) +
+  scale_y_continuous(name = "Article count", limits = c(0, 10)) +
+  ggtitle("Publication year") + 
+  theme(plot.title = element_text(hjust = 0.5))
+
 ```
 
 ## Adressing objective 3
