@@ -1,7 +1,6 @@
 ---
-title: "Non-genetic inheritance of environmental exposures: a protocol for an umbrella review with bibliometric analysis - pilot code"
-author: "Erin Macartney"
-date: "03/03/2021"
+title: "Non-genetic inheritance of environmental exposures: a protocol for a map of systematic reviews with bibliometric analysis - pilot code"
+author: "Erin Macartney, Szymek Drobniak, Shinichi Nakagawa, Malgorzata Lagisz"
 output:
   html_document:
     code_folding: hide
@@ -57,7 +56,7 @@ library(igraph)
 
 ### Data loading
 
-Manually extracted data used to address objectives 1,2 and 4 are stored in an .xls file with multiple spreadsheets within the same file. Bibliometric data used to address object 3 is stored as a .bib file that was exported directly from Scopus. Both files can be found on the open Science Framework https://osf.io/detvk/ 
+Manually extracted data used to address objectives 1,2 and 4 are stored in an .xls file with multiple spreadsheets within the same file. The tabs ending with "_code_info" do not have extracted data but have descriptions of each data element (presented in tables under each relevant subheading). Bibliometric data used to address object 3 is stored as a .bib file that was exported directly from Scopus. Both files can be found on the open Science Framework https://osf.io/detvk/ 
 
 ``` {r, message = FALSE, warning = FALSE, results = 'hide'}
 #Macbook
@@ -91,50 +90,9 @@ names(list_all) <- tab_names
 #get dataframes out of list
 list2env(list_all, .GlobalEnv) 
 
-
-#Review_info
-# #Review_info <- Review_info %>% 
-#   left_join(Topic_code_info, by = "topic_code") %>%
-#   left_join(Discipline_code_info, by = "discipline_code") %>% 
-#   left_join(Terminology_code_info, by = "terminology_code")%>%
-#   left_join(Mutagen_code_info, by = "mutagen_code")
-
-# #Higher_taxon_info
-# Higher_taxon_info <- left_join(Higher_taxon_info, Taxon_code_info)
-# 
-# #Transmission_info
-# Transmission_info <- left_join(Transmission_info, Transmission_code_info)
-# 
-# #Inter_vs_trans_info
-# Inter_vs_trans_info <- left_join(Inter_vs_trans_info, Inter_vs_trans_code_info)
-# 
-# #Env_mismatch_info
-# Env_mismatch_info <- left_join(Env_mismatch_info, Env_mismatch_code_info)
-# 
-# #F0_env_info
-# F0_env_info <- left_join(F0_env_info, F0_env_code_info)
-# 
-# #Env_eff_direction
-# Env_eff_direction_info <- left_join(Env_eff_diection_info, Env_eff_direction_code_info)
-# 
-# #Exposure_timing_info
-# Exposure_timing_info <- left_join(Exposure_timing_info, Exposure_timing_code_info)
-# 
-# #Descendant_trait_info
-# Descendant_trait_info <- left_join(Descendant_trait_info, Descendant_trait_code_info)
-# 
-# #Descendant_age_info
-# Descendant_age_info <- left_join(Descendant_age_info, Descendant_age_code_info)
-# 
-# #Descendant_sex_info
-# Descendant_sex_info <- left_join(Descendant_sex_info, Descendant_sex_code_info)
-# 
-# #Descendant_generat_info
-# Descendant_generat_info <- left_join(Descendant_generat_info, Descendant_generat_code_info)
-
 ```
 
-## Addressing objectives 1 and 2
+## Addressing objectives 1 and 2 {.tabset}
 
 1)	Map the SR literature across disciplines e.g., the types of environmental exposures and traits synthesised, the proportion of SRs that examine inter- versus trans-generational effects, and which disciplines dominate the non-genetic inheritance SR literature. The map will highlight gaps in the literature that remain to be synthesised or have very few SRs.
 
@@ -452,7 +410,7 @@ unique(Descendant_trait_info_unique)
 
 merged_descendant_sex <- merge(Descendant_sex_info, Review_info)
 
-count_descendant_sex <- merged_descendant_sex %>% count(controlled_vocab_descendant_sex, by = discipline_code) %>% arrange(desc(n))
+count_descendant_sex <- merged_descendant_sex %>% count(descendant_sex_code, by = discipline_code) %>% arrange(desc(n))
 percent_descendant_sex <- count_descendant_sex  %>% mutate(percent = (n/sum(n))*100)
 
 percent_descendant_sex <- percent_descendant_sex %>%
@@ -460,7 +418,7 @@ percent_descendant_sex <- percent_descendant_sex %>%
     discipline_code = by
            )
 
-ggplot(percent_descendant_sex, aes(x = controlled_vocab_descendant_sex, y = percent)) + 
+ggplot(percent_descendant_sex, aes(x = descendant_sex_code, y = percent)) + 
   geom_col(aes(fill = discipline_code), width = 0.7) + 
   theme_light() +
   coord_flip() + 
@@ -474,11 +432,11 @@ ggplot(percent_descendant_sex, aes(x = controlled_vocab_descendant_sex, y = perc
 
 Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
 ``` {r, }
-Descendant_sex_info_unique<- Descendant_sex_info %>% 
+Descendant_sex_info_unique<- Descendant_sex_code_info%>% 
   select(
-    descendant_sex_code, controlled_vocab_descendant_sex, description
+    controlled_vocab_descendant_sex, description
   )
-unique(Descendant_sex_info_unique) %>% arrange(descendant_sex_code)
+unique(Descendant_sex_info_unique)
 ```
 
 ### Descendant age within and between disciplines
@@ -488,7 +446,7 @@ unique(Descendant_sex_info_unique) %>% arrange(descendant_sex_code)
 
 merged_descendant_age <- merge(Descendant_age_info, Review_info)
 
-count_descendant_age <- merged_descendant_age %>% count(controlled_vocab_descendant_age, by = discipline_code) %>% arrange(desc(n))
+count_descendant_age <- merged_descendant_age %>% count(descendant_age_code, by = discipline_code) %>% arrange(desc(n))
 percent_descendant_age <- count_descendant_age %>% mutate(percent = (n/sum(n))*100)
 
 percent_descendant_age <- percent_descendant_age %>%
@@ -496,7 +454,7 @@ percent_descendant_age <- percent_descendant_age %>%
     discipline_code = by
   )
 
-ggplot(percent_descendant_age, aes(x = controlled_vocab_descendant_age, y = percent)) + 
+ggplot(percent_descendant_age, aes(x = descendant_age_code, y = percent)) + 
   geom_col(aes(fill = discipline_code), width = 0.7) + 
   theme_light() +
   coord_flip() + 
@@ -510,11 +468,11 @@ ggplot(percent_descendant_age, aes(x = controlled_vocab_descendant_age, y = perc
 
 Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
 ``` {r, }
-Descendant_age_info_unique<- Descendant_age_info %>% 
+Descendant_age_info_unique<- Descendant_age_code_info %>% 
   select(
-    descendant_age_code, controlled_vocab_descendant_age, description
+    controlled_vocab_descendant_age, description
   )
-unique(Descendant_age_info_unique) %>% arrange(descendant_age_code)
+unique(Descendant_age_info_unique) 
 ```
 
 ### Higher taxononmic groups within and between disciplines 
@@ -523,7 +481,7 @@ unique(Descendant_age_info_unique) %>% arrange(descendant_age_code)
 
 Merged_higher_taxon <- merge(Higher_taxon_info, Review_info)
 
-count_higher_taxon <- Merged_higher_taxon %>% count(controlled_vocab_taxon, by = discipline_code) %>% arrange(desc(n))
+count_higher_taxon <- Merged_higher_taxon %>% count(taxon_code, by = discipline_code) %>% arrange(desc(n))
 percent_higher_taxon <- count_higher_taxon %>% mutate(percent = (n/sum(n))*100)
 
 percent_higher_taxon<-percent_higher_taxon %>%
@@ -531,7 +489,7 @@ percent_higher_taxon<-percent_higher_taxon %>%
     discipline_code = by
   )
 
-ggplot(percent_higher_taxon, aes(x = controlled_vocab_taxon, y = percent)) + 
+ggplot(percent_higher_taxon, aes(x = taxon_code, y = percent)) + 
   geom_col(aes(fill = discipline_code), width = 0.7) + 
   theme_light() +
   coord_flip() + 
@@ -545,11 +503,11 @@ ggplot(percent_higher_taxon, aes(x = controlled_vocab_taxon, y = percent)) +
 
 Note that the description often equals controlled vocab but this is not always the case for more complicated elements.
 ``` {r, }
-Higher_taxon_info_unique<- Higher_taxon_info %>% 
+Higher_taxon_info_unique<- Taxon_code_info %>% 
   select(
-    taxon_code, controlled_vocab_taxon, description
+    controlled_vocab_taxon, description
   )
-unique(Higher_taxon_info_unique) %>% arrange(taxon_code)
+unique(Higher_taxon_info_unique)
 ```
 
 ### Descendent generation vs terminology use across disciplines
@@ -559,16 +517,16 @@ Does the terminology used (i.e., inter- vs trans-generational) match our definit
 
 generat_terminology <- merge(Descendant_generat_info, Review_info)
   
-count_generat_terminology <- generat_terminology %>% count(controlled_vocab_descendant_generat, by = controlled_vocab_terminology) %>% arrange(desc(n))
+count_generat_terminology <- generat_terminology %>% count(descendant_generat_code, by = terminology_code) %>% arrange(desc(n))
 percent_generat_terminology <- count_generat_terminology %>% mutate(percent = (n/sum(n))*100)
 
 percent_generat_terminology<-percent_generat_terminology %>%
   rename(
-    controlled_vocab_terminology = by
+    terminology_code = by
   )
 
-ggplot(percent_generat_terminology, aes(x = controlled_vocab_descendant_generat, y = percent)) + 
-  geom_col(aes(fill = controlled_vocab_terminology), width = 0.7) + 
+ggplot(percent_generat_terminology, aes(x = descendant_generat_code, y = percent)) + 
+  geom_col(aes(fill = terminology_code), width = 0.7) + 
   theme_light() +
   coord_flip() + 
   scale_y_continuous(name = "Percent") +
@@ -593,7 +551,7 @@ Publication_info %>% count(year) %>% ggplot(aes(x = year, y = n)) +
 
 ```
 
-## Adressing objective 3
+## Adressing objective 3 {.tabset}
 
 3)	Conduct bibliometric analyses of co-author networks and common terminology use across and within disciplines. 
 
@@ -648,7 +606,7 @@ NetMatrix_country_plot <-  networkPlot(NetMatrix_country, n = 50, Title = "Count
 
 ```
 
-## Addressing objective 4
+## Addressing objective 4 {.tabset}
 
 4)	Conduct a critical appraisal of the SR literature to assess the rigour, transparency, and risk of bias. 
 
